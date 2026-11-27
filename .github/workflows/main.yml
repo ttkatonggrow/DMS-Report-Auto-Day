@@ -5,11 +5,24 @@ on:
     # 18:47 เวลาไทย (UTC+7) = 11:47 UTC
     - cron: '47 11 * * *'
   workflow_dispatch:
+    inputs:
+      report_date:
+        description: 'Report date in Bangkok (YYYY-MM-DD)'
+        required: true
+        type: string
+      check_only:
+        description: 'Check the date only (no GPS login or email)'
+        required: true
+        type: boolean
+        default: true
 
 jobs:
   run-automation:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
 
     steps:
       - name: Checkout code
@@ -27,12 +40,20 @@ jobs:
       - name: Run Puppeteer Script
         # ลบ continue-on-error ออก เพื่อให้แจ้งเตือนสีแดงเมื่อระบบทำงานผิดพลาด
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPORT_DATE: ${{ github.event.inputs.report_date || '' }}
+          CHECK_ONLY: ${{ github.event_name == 'workflow_dispatch' && inputs.check_only }}
           DTC_USERNAME: ${{ secrets.DTC_USERNAME }}
           DTC_PASSWORD: ${{ secrets.DTC_PASSWORD }}
           EMAIL_USER: ${{ secrets.EMAIL_USER }}
           EMAIL_PASS: ${{ secrets.EMAIL_PASS }}
           EMAIL_TO: ${{ secrets.EMAIL_TO }}
-        run: node DTCREPORTDMS06TO18_Fixed.js
+        run: |
+          if [ "$CHECK_ONLY" = "true" ]; then
+            node DTCREPORTDMS06TO18_Fixed.js --check-report-date
+          else
+            node DTCREPORTDMS06TO18_Fixed.js
+          fi
 
       - name: Upload Debug Screenshots
         if: always() # ทำงานเสมอ ไม่ว่าจะ Success หรือ Failed เพื่อให้เราโหลดรูปไปดู Error ได้
